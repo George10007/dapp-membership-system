@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import axios from 'axios';
 import MemberList from './MemberList';
 import MemberForm from './MemberForm';
 import { Modal, Button } from 'antd'; // 引入 Modal 和 Button
@@ -34,6 +35,8 @@ const App = () => {
   const [contract, setContract] = useState(null);
   const [members, setMembers] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false); // 控制模態框顯示
+  const [staticKey, setStaticKey] = useState('');
+  const [dynamicKey, setDynamicKey] = useState('');
 
   // 初始化 ethers.js，連接到 MetaMask 或 Infura
   useEffect(() => {
@@ -53,7 +56,15 @@ const App = () => {
     };
 
     initBlockchain();
+    fetchKeys();
+    
   }, []);
+
+  const fetchKeys = async () => {
+    const response = await axios.get('http://localhost:5000/api/keys');
+    setStaticKey(response.data.static_key);
+    setDynamicKey(response.data.dynamic_key);
+  };
 
   // 獲取會員列表
   const fetchMembers = async () => {
@@ -107,6 +118,8 @@ const App = () => {
       const tx = await contract.add_member(member.name, member.email);
       await tx.wait(); // 等待交易完成
       console.log("Transaction confirmed");
+      await axios.post('http://localhost:5000/api/member/add');  // 更新動態 Key
+      fetchKeys(); // 刷新密鑰顯示
       fetchMembers();  // 成功後重新獲取會員列表
       setIsModalVisible(false); // 成功後關閉模態框
     } catch (error) {
@@ -141,7 +154,9 @@ const App = () => {
     try {
       const tx = await contract.remove_member(id - 1);  // 確保這裡傳遞的是會員的索引值，根據合約邏輯，id - 1
       await tx.wait();  // 等待交易完成
-     fetchMembers();   // 刪除後重新獲取會員列表
+      await axios.delete('http://localhost:5000/api/member/delete');  // 更新動態 Key
+      fetchKeys(); // 刷新密鑰顯示
+      fetchMembers();   // 刪除後重新獲取會員列表
     } catch (error) {
       console.error("Error deleting member:", error);
     }
@@ -160,6 +175,10 @@ const App = () => {
       <div className="center-button">
         <Button type="primary" onClick={showModal}>新增會員</Button>
         <Button type="danger" onClick={resetSignIn} style={{ marginLeft: '10px' }}>重置簽到</Button>
+      </div>
+      <div class="key-display">
+        <p>靜態 Key: {staticKey}</p>
+        <p>動態 Key: {dynamicKey}</p>
       </div>
       <Modal
         title="新增會員"
