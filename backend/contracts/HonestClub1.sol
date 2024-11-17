@@ -6,6 +6,8 @@ contract HonestClub1 {
     Member[] public members;
     uint private nextId = 1;
     uint8 public constant MAX_LEVEL = 5;
+    bytes32 public staticKey; // 靜態密鑰
+    bytes32 public dynamicKey; // 動態密鑰
 
     struct Member {
         uint id;
@@ -25,6 +27,8 @@ contract HonestClub1 {
 
     constructor() {
         clubMaster = msg.sender;
+        staticKey = keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender));
+        dynamicKey = staticKey;
     }
 
     modifier onlyMaster() {
@@ -41,6 +45,8 @@ contract HonestClub1 {
         require(members.length < 20, "Member limit reached");
         members.push(Member(nextId, name, email, false, 1, block.timestamp, msg.sender));
         nextId++;
+        // 更新動態密鑰：加上隨機數種子
+        dynamicKey = keccak256(abi.encodePacked(dynamicKey));
         emit MemberAdded(name, email); // 發送事件通知前端
     }
 
@@ -52,10 +58,11 @@ contract HonestClub1 {
         require(id < members.length, "Invalid member ID");  // 確保 ID 合法
         for (uint256 i = id; i < members.length - 1; i++) {
             members[i] = members[i + 1];  // 將後續的會員往前移動
-            members[i].id--;            
+            members[i].id--;
         }
         nextId--;
         members.pop();  // 刪除最後一個重複的會員
+        dynamicKey = keccak256(abi.encodePacked(dynamicKey, block.timestamp, block.prevrandao));
         emit MemberRemoved(id);
     }
 
@@ -80,5 +87,10 @@ contract HonestClub1 {
 
     function getAllMembers() public view returns (Member[] memory) {
         return members;
+    }
+
+    // 獲取當前密鑰
+    function getKeys() public view returns (bytes32, bytes32) {
+        return (staticKey, dynamicKey);
     }
 }

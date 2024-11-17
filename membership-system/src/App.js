@@ -7,7 +7,7 @@ import { Modal, Button } from 'antd'; // 引入 Modal 和 Button
 import './App.css';
 
 // 部署後的智能合約地址
-const CONTRACT_ADDRESS = '0x177D7B2A23D674160F20C26aca30d0031DA3d6f6';
+const CONTRACT_ADDRESS = '0x51f834A86F83D9D67E7de681B22484F6A0Bc0A26';
 // 合約的 ABI
 const CONTRACT_ABI = [
     "constructor()",
@@ -18,6 +18,7 @@ const CONTRACT_ABI = [
     "function signInMember(uint256 id) public",
     "function resetSignIn() public",
     "function getAllMembers() public view returns (tuple(uint id, string name, string email, bool signIn, uint8 level, uint registerTime, address memberAddress)[])",
+    "function getKeys() view returns (bytes32 staticKey, bytes32 dynamicKey)",
     "event MemberAdded(string name, string email)",
     "event MemberRemoved(uint256 id)",
     "event MemberLevelAdjusted(uint256 id, uint8 newLevel)",
@@ -53,17 +54,20 @@ const App = () => {
       setProvider(provider);
       setSigner(signer);
       setContract(contract);
+      fetchKeysFromContract(); // 初始化時獲取密鑰
     };
 
     initBlockchain();
-    fetchKeys();
-    
   }, []);
 
-  const fetchKeys = async () => {
-    const response = await axios.get('http://localhost:5000/api/keys');
-    setStaticKey(response.data.static_key);
-    setDynamicKey(response.data.dynamic_key);
+  const fetchKeysFromContract = async () => {
+    try {
+      const keys = await contract.getKeys();
+      setStaticKey(keys[0]); // 設定靜態密鑰
+      setDynamicKey(keys[1]); // 設定動態密鑰
+    } catch (error) {
+      console.error("Error fetching keys from contract:", error);
+    }
   };
 
   // 獲取會員列表
@@ -88,6 +92,7 @@ const App = () => {
   useEffect(() => {
     if (contract) {
       fetchMembers(); // 合約初始化後立即獲取會員列表
+      fetchKeysFromContract(); // 初始化時獲取密鑰
     }
   }, [contract]);
 
@@ -118,8 +123,8 @@ const App = () => {
       const tx = await contract.add_member(member.name, member.email);
       await tx.wait(); // 等待交易完成
       console.log("Transaction confirmed");
-      await axios.post('http://localhost:5000/api/member/add');  // 更新動態 Key
-      fetchKeys(); // 刷新密鑰顯示
+      
+      fetchKeysFromContract(); // 更新後重新抓取密鑰
       fetchMembers();  // 成功後重新獲取會員列表
       setIsModalVisible(false); // 成功後關閉模態框
     } catch (error) {
@@ -154,8 +159,7 @@ const App = () => {
     try {
       const tx = await contract.remove_member(id - 1);  // 確保這裡傳遞的是會員的索引值，根據合約邏輯，id - 1
       await tx.wait();  // 等待交易完成
-      await axios.delete('http://localhost:5000/api/member/delete');  // 更新動態 Key
-      fetchKeys(); // 刷新密鑰顯示
+      fetchKeysFromContract(); // 更新後重新抓取密鑰
       fetchMembers();   // 刪除後重新獲取會員列表
     } catch (error) {
       console.error("Error deleting member:", error);
